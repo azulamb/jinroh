@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ja" style="font-size:5vmin;">
+<head>
+	<meta charset="utf-8">
+	<title>Jinroh support tool</title>
+	<meta name="description" content="">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black">
+	<link rel="apple-touch-icon" sizes="152x152" href="./apple-touch-icon-precomposed.png">
+	<style>
+#players > div, .total { display: grid; grid-template-columns: 1rem 1fr 4rem 1rem; grid-template-rows: 1.5rem; }
+select, input, button { font-size: 1rem; }
+.sub::before { content: '-'; }
+.add::before { content: '+'; }
+section { display: none; }
+#start::before { content: 'Start'; }
+button { cursor: pointer; }
+.up::before { content: '▲'; }
+.down::before { content: '▼'; }
+.dead::before { content: '死'; }
+.punish::before { content: '吊'; }
+.deadman { opacity: 0.5; }
+.dead.enable, .punish.enable { background-color: pink; }
+#manager { display: grid; grid-template-columns: 50% 50%; grid-template-rows: 1.5rem 1fr; grid-template-areas: 'a b' 'c c';}
+#manager > div { grid-area: c; }
+#manager > div > div { display: none; }
+#manager[data-mode="table"] button:not([data-mode="table"]), #manager[data-mode="member"] button:not([data-mode="member"]) { opacity: 0.5; }
+#manager[data-mode="table"] > div > #table, #manager[data-mode="member"] > div > #member { display: block; }
+#table > div { display: grid; grid-template-columns: 1.5rem 1.5rem 1.5rem 1fr 1.5rem 1.5rem; grid-template-rows: 1.5rem; }
+#member > div { display: grid; grid-template-columns: 1.5rem 1fr 1.5rem 1.5rem; grid-template-rows: 1.5rem; }
+.role { display: inline-block; font-weight: bold; padding: 0 0.1rem; }
+h2, h3, h4 { text-align: center; }
+#timer { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1.5rem 1.5rem; grid-template-areas: 'a b' 'c c'; margin: 0.5rem 0 1rem; }
+#timer_button { grid-area: c; }
+#timer_button::before { content: '▶'; }
+#timer_button[data-timer]::before { content: '■'; }
+body[data-mode="setup"] section#setup, body[data-mode="play"] section#play { display: block; }
+	</style>
+	<script>
+const ROLE = [
+	{
+		name: 'citizen',
+		names: ['市民', '村人'],
+		text: '%citizen%は特殊能力を持たないただの市民です。',
+	},
+	{
+		name: 'prophet',
+		names: ['預言者', '占い師'],
+		text: '%prophet%は毎晩一人を占うことができます。占った人が%werewolf%だった場合は「%werewolf%」、%werewolf%でなかった場合は「%citizen%」と占われます。',
+	},
+	{
+		name: 'psychic',
+		names: ['霊媒師', '霊能者'],
+		text: '%psychic%は毎晩その昼に処刑された人の役職を知ることができます。',
+	},
+	{
+		name: 'guard',
+		names: ['ボディーガード', '狩人', '守護者'],
+		text: '%guard%は毎晩一人を守ることができます。%guard%が%werewolf%に襲撃された場合は守れません。',
+	},
+	{
+		name: 'werewolf',
+		names: ['人狼'],
+		text: '%werewolf%は毎晩一人を襲撃することができます。',
+	},
+	{
+		name: 'madman',
+		names: ['裏切り者', '狂人'],
+		text: '%madman%は%werewolf%の味方です。%werewolf%が勝利した場合は%madman%も勝利します。',
+	},
+];
+const START_PLAYER = 4;
+const PLAYERS = [
+	{ citizen: 2, werewolf: 1, prophet: 1 },
+	{ citizen: 3, werewolf: 1, prophet: 1 },
+	{ citizen: 4, werewolf: 1, prophet: 1 },
+	{ citizen: 2, werewolf: 2, prophet: 1, psychic: 1, guard: 1 },
+	{ citizen: 3, werewolf: 2, prophet: 1, psychic: 1, guard: 1 },
+	{ citizen: 3, werewolf: 2, prophet: 1, psychic: 1, guard: 1, madman: 1 },
+	{ citizen: 4, werewolf: 2, prophet: 1, psychic: 1, guard: 1, madman: 1 },
+	{ citizen: 5, werewolf: 3, prophet: 1, psychic: 1, guard: 1, madman: 1 },
+	{ citizen: 6, werewolf: 3, prophet: 1, psychic: 1, guard: 1, madman: 1 },
+	{ citizen: 7, werewolf: 3, prophet: 1, psychic: 1, guard: 1, madman: 1 },
+	{ citizen: 8, werewolf: 3, prophet: 1, psychic: 1, guard: 1, madman: 1 },
+	{ citizen: 9, werewolf: 3, prophet: 1, psychic: 1, guard: 1, madman: 1 },
+];
+document.addEventListener('DOMContentLoaded', (event) => {
+	function changePage(page) {
+		document.body.dataset.mode = page;
+	}
+	changePage.setup = () => {
+		changePage('setup');
+	};
+	changePage.play = () => {
+		changePage('play');
+	};
+
+	const playerCounts = [];
+	const updateTotal = ((total) => {
+		return () => {
+			const players = [];
+			const count = playerCounts.reduce((prev, now) => {
+				const count = parseInt(now.value);
+				for (let i = 0;i < count;++i) {
+					players.push(now.dataset.player);
+				}
+				return prev + count;
+			}, 0);
+			total.textContent = `${count}`;
+
+			return players.map((name) => {
+				const select = document.querySelector(`[data-player="${name}"]`);
+				if (!select.options[select.selectedIndex]) {
+					return {};
+				}
+
+				const player = ROLE.find((player) => {
+					return player.name === name;
+				});
+				const showName = player.names[select.selectedIndex];
+				const data = ROLE.find((role) => {
+					return role.name === showName;
+				});
+				return {
+					key: name,
+					name: showName,
+					text: player.text.replace(/%(\w+)%/g, (match, p1) => {
+						const select = document.querySelector(`[data-player="${p1}"]`);
+						return select.options[select.selectedIndex].textContent;
+					}),
+				};
+			})
+		};
+	})(document.getElementById('total'));
+
+	const updates = ((parent, template) => {
+		const updates = {};
+		for (const role of ROLE) {
+			const item = document.createElement('div');
+			item.innerHTML = template.innerHTML;
+			parent.appendChild(item);
+
+			const select = item.querySelector('select');
+			for (const name of role.names) {
+				const option = document.createElement('option');
+				option.value = name;
+				option.textContent = name;
+				select.appendChild(option);
+			}
+			select.dataset.player = role.name;
+
+			const count = item.querySelector('input');
+			playerCounts.push(count);
+			count.addEventListener('change', () => {
+				updateTotal();
+			});
+			count.dataset.player = role.name;
+
+			const min = parseInt(count.min);
+			const max = parseInt(count.max);
+
+			item.querySelector('.sub').addEventListener('click', (event) => {
+				count.value = Math.max(min, parseInt(count.value) - 1);
+				updateTotal();
+			});
+			item.querySelector('.add').addEventListener('click', (event) => {
+				count.value = Math.min(max, parseInt(count.value) + 1);
+				updateTotal();
+			});
+
+			updates[role.name] = (value) => {
+				count.value = value;
+				updateTotal();
+			};
+		}
+
+		return updates;
+	})(document.getElementById('players'), document.getElementById('template_player'));
+
+	const setPlayers = (() => {
+		return (player) => {
+			Object.keys(player).forEach((key) => {
+				updates[key](player[key]);
+			});
+			updateTotal();
+		};
+	})();
+
+	((select) => {
+		let index = 0;
+		for (const player of PLAYERS) {
+			const total = Object.values(player).reduce((a, b) => {
+				return a + b;
+			});
+			const option = document.createElement('option');
+			option.value = index++;
+			option.textContent = `${total}人`;
+			select.appendChild(option);
+		}
+
+		select.addEventListener('change', (event) => {
+			const index = event.target.value;
+			const player = PLAYERS[index];
+			setPlayers(player);
+		});
+
+	})(document.getElementById('default'));
+
+	document.getElementById('start').addEventListener('click', (event) => {
+		const players = updateTotal();
+
+		if (players.length <= 2) {
+			return alert('プレイ人数が少なすぎます。');
+		}
+
+		updateTable(players);
+		updateMember(players);
+		updateText();
+
+		changePage.play();
+	});
+
+	const updateTable = ((parent, template) => {
+		function update() {
+			const children = parent.children;
+			for (let i = 0;i < children.length;++i) {
+				const child = children[i];
+				child.querySelector('.no').textContent = i + 1;
+			}
+		}
+
+		return (players) => {
+			parent.innerHTML = '';
+
+			for (const player of players) {
+				const item = document.createElement('div');
+				item.innerHTML = template.innerHTML;
+
+				item.querySelector('.down').addEventListener('click', (event) => {
+					const index = Array.from(parent.children).indexOf(item);
+					if (index === parent.children.length - 1) {
+						return;
+					}
+					parent.insertBefore(item, parent.children[index + 2]);
+					update();
+				});
+				item.querySelector('.up').addEventListener('click', (event) => {
+					const index = Array.from(parent.children).indexOf(item);
+					if (index === 0) {
+						return;
+					}
+					parent.insertBefore(item, parent.children[index - 1]);
+					update();
+				});
+				item.querySelector('.name').textContent = player.name;
+				item.querySelector('.dead').addEventListener('click', (event) => {
+					event.target.classList.toggle('enable');
+					item.classList.toggle('deadman');
+				});
+				item.querySelector('.punish').addEventListener('click', (event) => {
+					event.target.classList.toggle('enable');
+					item.classList.toggle('deadman');
+				});
+
+				parent.appendChild(item);
+			}
+
+			update();
+		};
+	})(document.getElementById('table'), document.getElementById('player_item'));
+
+	const updateMember = ((parent, template) => {
+		return (players) => {
+			parent.innerHTML = '';
+
+			const roles = players.map((player) => {
+				return player.key;
+			}).filter((key, index, array) => {
+				return array.indexOf(key) === index;
+			});
+
+			let no = 0;
+			for (const player of players) {
+				const item = document.createElement('div');
+				item.innerHTML = template.innerHTML;
+
+				item.querySelector('.no').textContent = ++no;
+				const select = item.querySelector('.name');
+				for (const role of roles) {
+					const option = document.createElement('option');
+					option.value = role;
+					option.textContent = players.find((player) => {
+						return player.key === role;
+					}).name;
+					select.appendChild(option);
+				}
+
+				item.querySelector('.dead').addEventListener('click', (event) => {
+					event.target.classList.toggle('enable');
+					item.classList.toggle('deadman');
+				});
+				item.querySelector('.punish').addEventListener('click', (event) => {
+					event.target.classList.toggle('enable');
+					item.classList.toggle('deadman');
+				});
+
+				parent.appendChild(item);
+			}
+		};
+	})(document.getElementById('member'), document.getElementById('member_item'));
+
+	const updateText = ((texts) => {
+		return () => {
+			for (const text of texts) {
+				const role = text.dataset.role;
+				const player = document.querySelector(`[data-player="${role}"]`);
+				text.textContent = player.options[player.selectedIndex].textContent;
+			}
+		};
+	})(document.querySelectorAll('.role'));
+
+	document.querySelectorAll('#manager > button').forEach((button) => {
+		button.addEventListener('click', (event) => {
+			const mode = event.target.dataset.mode;
+			button.parentElement.dataset.mode = mode;
+		});
+	});
+
+	((minute, second, timer) => {
+		const allMinutes = [];
+		for (let i = 0 ; i <= 15 ; ++i) {
+			const option = document.createElement('option');
+			option.value = i;
+			option.textContent = `${i}`.padStart(2, ' ');
+			minute.appendChild(option);
+			allMinutes.push(option);
+			if (i === 5) {
+				option.selected = true;
+			}
+		}
+		const allSeconds = [];
+		for (let i = 0 ; i <= 59 ; ++i) {
+			const option = document.createElement('option');
+			option.value = i;
+			option.textContent = `${i}`.padStart(2, ' ');
+			second.appendChild(option);
+			allSeconds.push(option);
+		}
+		let defaultMinute = 5;
+		let defaultSecond = 0;
+		timer.addEventListener('click', (event) => {
+			if (timer.dataset.timer) {
+				clearInterval(timer.dataset.timer);
+				timer.dataset.timer = '';
+				minute.selectedIndex = defaultMinute;
+				second.selectedIndex = defaultSecond;
+			} else {
+				const start = Date.now();
+				const end = start + (parseInt(minute.value) * 60 + parseInt(second.value)) * 1000;
+				defaultMinute = minute.selectedIndex;
+				defaultSecond = second.selectedIndex;
+				timer.dataset.timer = setInterval(() => {
+					const now = Date.now();
+					if (now >= end) {
+						clearInterval(timer.dataset.timer);
+						timer.dataset.timer = '';
+						return;
+					}
+					const diff = end - now;
+					const min = Math.floor(diff / 1000 / 60);
+					const sec = Math.floor(diff / 1000) % 60;
+
+					minute.selectedIndex = min;
+					second.selectedIndex = sec;
+				}, 100);
+			}
+		});
+	})(document.getElementById('minute'), document.getElementById('second'), document.getElementById('timer_button'));
+
+	setPlayers(PLAYERS[0]);
+
+	changePage.setup();
+});
+	</script>
+</head>
+<body>
+	<section id="setup">
+		<div>
+			<label>プレイ人数</label>
+			<select id="default"></select>
+		</div>
+		<div id="players">
+			<template id="template_player">
+				<button class="sub"></button>
+				<select></select>
+				<input type="number" min="0" max="20" step="1" value="0">
+				<button class="add"></button>
+			</template>
+		</div>
+		<div class="total">
+			<span></span>
+			<span>合計人数</span>
+			<span id="total"></span>
+			<span></span>
+		</div>
+		<button id="start"></button>
+	</section>
+	<section id="play">
+		<div id="timer">
+			<select id="minute"></select>
+			<select id="second"></select>
+			<button id="timer_button"></button>
+		</div>
+		<div id="manager" data-mode="table">
+			<button data-mode="table">役職一覧</button>
+			<button data-mode="member">メンバー一覧</button>
+			<div>
+				<div id="table">
+					<template id="player_item">
+						<span class="no"></span>
+						<button class="up"></button>
+						<button class="down"></button>
+						<span class="name"></span>
+						<button class="dead"></button>
+						<button class="punish"></button>
+					</template>
+				</div>
+				<div id="member">
+					<template id="member_item">
+						<span class="no"></span>
+						<select class="name"></select>
+						<button class="dead"></button>
+						<button class="punish"></button>
+					</template>
+				</div>
+			</div>
+		</div>
+		<div id="turn">
+			<h3>役職確認</h3>
+			<p>全員頭を伏せ片手で音を立てながら待機する。呼ばれた役職の人は顔を起こす。</p>
+			<p><span class="role" data-role="psychic"></span>の確認</p>
+			<p><span class="role" data-role="prophet"></span>の確認(市民を有利にする場合は初手占う)</p>
+			<p><span class="role" data-role="werewolf"></span>の確認</p>
+			<p><span class="role" data-role="guard"></span>の確認(初手占った場合は誰かを守る)</p>
+			<h3>ゲーム開始</h3>
+			<h4>朝</h4>
+			<p>
+				昨夜<span class="role" data-role="werewolf"></span>に殺された人を発表する。（初日はGMが死んだことになっているのでその発表を行う。）
+				もし<span class="role" data-role="guard"></span>が守っていた場合は死人なし。
+			</p>
+			<h4>昼</h4>
+			<p>会議の終了後は基本的に発言なしで、投票を行う。一斉に指を指すなどして後の人が不利にならないようにする。</p>
+			<p>もし投票が同率の場合、対象者は立って一人ずつ弁明を行い、残ったメンバーで投票を行う。もしそれでも引き分けの場合はダイスロールで一番小さい値を出した人が処刑される。</p>
+			<h4>夜</h4>
+			<p>全員伏せて片手で音を立てる。呼ばれた人は片手で音を立てながら顔を起こし、結果や対象の指定を行う。</p>
+			<p><span class="role" data-role="psychic"></span>に昨晩死んだ人の結果を<span class="role" data-role="werewolf"></span>か<span class="role" data-role="citizen"></span>で伝える</p>
+			<p><span class="role" data-role="prophet"></span>に誰を占うか聞き、<span class="role" data-role="werewolf"></span>か<span class="role" data-role="citizen"></span>で伝える</p>
+			<p><span class="role" data-role="werewolf"></span>に誰を殺すか聞く</p>
+			<p><span class="role" data-role="guard"></span>に誰を守るか聞く（人狼の指定と被った時は無効化されることに注意）</p>
+		</div>
+		<div id="log"></div>
+	</section>
+</body>
+</html>
