@@ -1,1 +1,3 @@
 # jinroh
+
+![](docs/qr.png)
