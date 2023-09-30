@@ -459,6 +459,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
 			<p><span class="role" data-role="prophet"></span>に誰を占うか聞き、<span class="role" data-role="werewolf"></span>か<span class="role" data-role="citizen"></span>で伝える</p>
 			<p><span class="role" data-role="werewolf"></span>に誰を殺すか聞く</p>
 			<p><span class="role" data-role="guard"></span>に誰を守るか聞く（人狼の指定と被った時は無効化されることに注意）</p>
+			<h3>勝利条件</h3>
+			<h4 class="role" data-role="werewolf"></h4>
+			<p><span class="role" data-role="citizen"></span>≦<span class="role" data-role="werewolf"></span>数になったとき</p>
+			<p><span class="role" data-role="werewolf"></span>が0になったとき</p>
+			<p>演出として確定後に夜のフェーズを入れ、翌朝平和or全滅のストーリーを語るのもあり。</p>
 		</div>
 		<div id="log"></div>
 	</section>
