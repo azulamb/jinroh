@@ -11,12 +11,12 @@
 	<link rel="apple-touch-icon" sizes="152x152" href="./apple-touch-icon-precomposed.png">
 	<style>
 #players > div, .total { display: grid; grid-template-columns: 1rem 1fr 4rem 1rem; grid-template-rows: 1.5rem; }
-select, input, button { font-size: 1rem; }
+select, input, button { font-size: 1rem; -webkit-appearance: none; }
 .sub::before { content: '-'; }
 .add::before { content: '+'; }
 section { display: none; }
 #start::before { content: 'Start'; }
-button { cursor: pointer; padding: 0; -webkit-appearance: none; }
+button { cursor: pointer; padding: 0; }
 .up::before { content: '▲'; }
 .down::before { content: '▼'; }
 .dead::before { content: '死'; }
