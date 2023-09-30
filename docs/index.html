@@ -29,7 +29,7 @@ button { cursor: pointer; }
 #manager[data-mode="table"] button:not([data-mode="table"]), #manager[data-mode="member"] button:not([data-mode="member"]) { opacity: 0.5; }
 #manager[data-mode="table"] > div > #table, #manager[data-mode="member"] > div > #member { display: block; }
 #table > div { display: grid; grid-template-columns: 1.5rem 1.5rem 1.5rem 1fr 1.5rem 1.5rem; grid-template-rows: 1.5rem; }
-#member > div { display: grid; grid-template-columns: 1.5rem 1fr 1.5rem 1.5rem; grid-template-rows: 1.5rem; }
+#member > div { display: grid; grid-template-columns: 1.5rem 1fr 1fr 1.5rem 1.5rem; grid-template-rows: 1.5rem; }
 .role { display: inline-block; font-weight: bold; padding: 0 0.1rem; }
 h2, h3, h4 { text-align: center; }
 #timer { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1.5rem 1.5rem; grid-template-areas: 'a b' 'c c'; margin: 0.5rem 0 1rem; }
@@ -431,6 +431,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
 					<template id="member_item">
 						<span class="no"></span>
 						<select class="name"></select>
+						<input type="text" placeholder="名前">
 						<button class="dead"></button>
 						<button class="punish"></button>
 					</template>
